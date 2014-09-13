@@ -1,6 +1,7 @@
 var path = require('path');
 var fs = require('fs');
 var archive = require('../helpers/archive-helpers');
+var _ = require('underscore');
 
 exports.headers = headers = {
   "access-control-allow-origin": "*",
@@ -10,16 +11,25 @@ exports.headers = headers = {
   'Content-Type': "text/html"
 };
 
-exports.serveAssets = function(res, asset, callback) {
-  // Write some code here that helps serve up your static files!
-  // (Static files are things like html (yours or archived from others...), css, or anything that doesn't change often.)
+exports.serveAssets = function(res, asset, site) {
   fs.readFile(asset, function(err, html) {
-    console.log(asset);
+    // not in archives/sites
     if(err) {
-      // if there's an error, then 404!
-      res.writeHead(404, headers);
-      res.end();
-    } else {
+      site = site.substring(1);
+      lookForArchivedSite(site, function(found) {
+        // in sites.txt, just not archived yet
+        if(found) {
+          redirect(res, 'loading.html');
+        }
+        // not in sites.txt, 404!
+        else {
+          res.writeHead(404, headers);
+          res.end();
+        }
+      });
+    }
+    // we have already archived it; serve it up!
+    else {
       res.writeHead(200, headers);
       res.write(html);
       res.end();
@@ -27,6 +37,30 @@ exports.serveAssets = function(res, asset, callback) {
   });
 };
 
+exports.redirect = redirect = function(res, redirectPage) {
+  res.writeHead(302, _.extend({
+    'Location': '/' + redirectPage
+  }, headers));
+  res.end();
+};
 
+exports.lookForArchivedSite = lookForArchivedSite = function(site, callback) {
+  var found = false;
+  fs.readFile(
+    archive.paths.list,
+    function(err, data){
+      var sites = data.toString().split('\n');
 
-// As you progress, keep thinking about what helper functions you can put here!
+      sites.forEach(
+        function(line, index) {
+          if(site === line) {
+            found = true;
+            // i dont think we can actually return out of forEach()
+            return found;
+          }
+        }
+      );
+      callback(found);
+    }
+  );
+};
